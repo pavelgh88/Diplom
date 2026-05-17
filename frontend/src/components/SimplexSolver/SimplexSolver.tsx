@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Alert, Card, Collapse, Statistic, Row, Col, Typography, Spin } from "antd";
 import ProblemInputForm from "../ProblemInputForm";
+import type { ProblemInputFormHandle } from "../ProblemInputForm";
 import SimplexTable from "./SimplexTable";
+import TaskSelector from "../TaskSelector";
 import { solveSimplex } from "../../api/client";
 import type { LPProblem, SimplexResult } from "../../types";
 
@@ -10,6 +12,7 @@ const { Title, Text } = Typography;
 const SimplexSolver: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SimplexResult | null>(null);
+  const formRef = useRef<ProblemInputFormHandle | null>(null);
 
   const handleSolve = async (problem: LPProblem) => {
     setLoading(true);
@@ -24,6 +27,10 @@ const SimplexSolver: React.FC = () => {
     }
   };
 
+  const handleLoadTask = (problem: object) => {
+    formRef.current?.loadProblem(problem as LPProblem);
+  };
+
   return (
     <div>
       <Title level={4}>Симплекс-метод</Title>
@@ -31,8 +38,10 @@ const SimplexSolver: React.FC = () => {
         Розв'язує задачу лінійного програмування покроково із відображенням симплекс-таблиці на кожній ітерації.
       </Text>
 
-      <Card style={{ marginTop: 16 }}>
-        <ProblemInputForm onSolve={handleSolve} loading={loading} />
+      <TaskSelector taskType="simplex" onLoad={handleLoadTask} />
+
+      <Card style={{ marginTop: 8 }}>
+        <ProblemInputForm ref={formRef} onSolve={handleSolve} loading={loading} />
       </Card>
 
       {loading && (

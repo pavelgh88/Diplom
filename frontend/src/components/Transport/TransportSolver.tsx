@@ -18,7 +18,8 @@ import {
 import { MinusOutlined, PlusOutlined } from "@ant-design/icons";
 import { solveTransport } from "../../api/client";
 import TransportTable from "./TransportTable";
-import type { TransportResult } from "../../types";
+import TaskSelector from "../TaskSelector";
+import type { TransportProblem, TransportResult } from "../../types";
 
 const { Title, Text } = Typography;
 
@@ -33,6 +34,19 @@ const TransportSolver: React.FC = () => {
     demand: number[];
     costs: number[][];
   } | null>(null);
+
+  const handleLoadTask = (problem: object) => {
+    const p = problem as TransportProblem;
+    const m = p.supply.length;
+    const n = p.demand.length;
+    setNumSources(m);
+    setNumDests(n);
+    const fields: Record<string, number> = {};
+    p.supply.forEach((v, i) => { fields[`s_${i}`] = v; });
+    p.demand.forEach((v, j) => { fields[`d_${j}`] = v; });
+    p.costs.forEach((row, i) => row.forEach((v, j) => { fields[`c_${i}_${j}`] = v; }));
+    form.setFieldsValue(fields);
+  };
 
   const handleFinish = async (values: any) => {
     const supply: number[] = Array.from({ length: numSources }, (_, i) => values[`s_${i}`] ?? 0);
@@ -59,6 +73,8 @@ const TransportSolver: React.FC = () => {
 
   return (
     <div>
+      <TaskSelector taskType="transport" onLoad={handleLoadTask} />
+
       <Card title="Параметри транспортної задачі">
         <Form form={form} layout="vertical" onFinish={handleFinish}>
           {/* Source / Destination count controls */}

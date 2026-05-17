@@ -79,12 +79,16 @@ def solve_branch_and_bound(
             nodes.append(node)
             return
 
-        # Find first fractional variable
+        # Find most fractional variable (closest to 0.5 → maximal branching uncertainty)
         frac_idx: Optional[int] = None
+        frac_max = 0.0
         for i, val in enumerate(result.x):
-            if abs(val - round(val)) > 1e-6:
-                frac_idx = i
-                break
+            frac_part = val - math.floor(val)
+            if frac_part > 1e-6:
+                dist = min(frac_part, 1.0 - frac_part)
+                if dist > frac_max:
+                    frac_max = dist
+                    frac_idx = i
 
         # All variables are integer — update best solution
         if frac_idx is None:

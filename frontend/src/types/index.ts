@@ -29,6 +29,23 @@ export interface SimplexResult {
   error?: string;
 }
 
+export interface SimplexCheckRequest {
+  tableau: number[][];
+  col_names: string[];
+  user_pivot_col: number;
+  user_pivot_row: number;
+}
+
+export interface ValidatorResult {
+  valid: boolean;
+  message: string;
+  correct_col?: number | null;
+  correct_row?: number | null;
+  correct_var?: number | null;
+  hint?: string | null;
+  total_cost?: number;
+}
+
 // ──── Branch and Bound ────────────────────────────────────────────────────────
 
 export type BnBNodeStatus = "branched" | "integer" | "infeasible" | "pruned";
@@ -83,4 +100,24 @@ export interface TransportResult {
   dummy_row?: boolean;
   dummy_col?: boolean;
   error?: string;
+}
+
+// ──── Tasks library ───────────────────────────────────────────────────────────
+
+export type TaskType = "simplex" | "branch_and_bound" | "transport";
+
+export interface TaskSummary {
+  id: number;
+  title: string;
+  type: TaskType;
+  description: string;
+}
+
+export interface Task extends TaskSummary {
+  theory_hint: string;
+  problem: LPProblem | TransportProblem;
+  expected?: {
+    optimal_value?: number;
+    solution?: number[];
+  };
 }

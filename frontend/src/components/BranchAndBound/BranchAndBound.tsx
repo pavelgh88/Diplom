@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Alert, Badge, Card, Col, Row, Spin, Statistic, Table, Typography } from "antd";
 import ProblemInputForm from "../ProblemInputForm";
+import type { ProblemInputFormHandle } from "../ProblemInputForm";
 import BnBTree from "./BnBTree";
+import TaskSelector from "../TaskSelector";
 import { solveBranchAndBound } from "../../api/client";
 import type { BnBResult, LPProblem } from "../../types";
 
@@ -24,6 +26,11 @@ const STATUS_LABEL: Record<string, string> = {
 const BranchAndBound: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BnBResult | null>(null);
+  const formRef = useRef<ProblemInputFormHandle | null>(null);
+
+  const handleLoadTask = (problem: object) => {
+    formRef.current?.loadProblem(problem as LPProblem);
+  };
 
   const handleSolve = async (problem: LPProblem) => {
     setLoading(true);
@@ -73,8 +80,10 @@ const BranchAndBound: React.FC = () => {
         Розв'язує цілочисельну задачу лінійного програмування методом гілок і меж з візуалізацією дерева перебору.
       </Text>
 
-      <Card style={{ marginTop: 16 }}>
-        <ProblemInputForm onSolve={handleSolve} loading={loading} showBounds />
+      <TaskSelector taskType="branch_and_bound" onLoad={handleLoadTask} />
+
+      <Card style={{ marginTop: 8 }}>
+        <ProblemInputForm ref={formRef} onSolve={handleSolve} loading={loading} showBounds />
       </Card>
 
       {loading && (
