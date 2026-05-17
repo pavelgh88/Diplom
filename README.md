@@ -17,7 +17,7 @@
 
 ### Backend
 - **Python 3.12**
-- **Flask 3.0** — REST API (9 ендпоінтів)
+- **Flask 3.0** — REST API (9 ендпоінтів), `create_app()` factory, Blueprint-архітектура
 - **NumPy** — матричні обчислення
 - **SciPy** (`linprog`) — LP-релаксації у методі гілок і меж
 - **pytest** — 43 автоматичні тести
@@ -37,6 +37,8 @@
 ```
 diploma_project/
 ├── backend/
+│   ├── api/
+│   │   └── routes.py             # Flask Blueprint — всі маршрути /api/*
 │   ├── algorithms/
 │   │   ├── simplex.py            # Симплекс-метод
 │   │   ├── branch_and_bound.py   # Метод гілок і меж
@@ -49,7 +51,8 @@ diploma_project/
 │   │   ├── test_branch_and_bound.py  # 12 тестів
 │   │   ├── test_transport.py     # 10 тестів
 │   │   └── test_validator.py     # 11 тестів
-│   ├── app.py                    # Flask API (порт 5001)
+│   ├── app.py                    # create_app() factory (порт 5001)
+│   ├── .env.example              # Шаблон змінних середовища
 │   └── requirements.txt
 └── frontend/
     └── src/
@@ -80,8 +83,11 @@ cd backend
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env              # налаштування середовища
 python app.py                     # → http://localhost:5001
 ```
+
+> Для режиму розробки: `FLASK_DEBUG=1 python app.py`
 
 ### Frontend
 
