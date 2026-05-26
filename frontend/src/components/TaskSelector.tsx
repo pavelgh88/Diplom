@@ -36,7 +36,11 @@ const TaskSelector: React.FC<Props> = ({ taskType, onLoad }) => {
       .then(setTasks)
       .catch(() => setTasks([]))
       .finally(() => setLoading(false));
-  }, [taskType]);
+    // Clear task from another algorithm type when switching tabs
+    if (selectedTask && selectedTask.type !== taskType) {
+      setSelectedTask(null);
+    }
+  }, [taskType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = async (id: number) => {
     setLoadingTask(true);
@@ -71,7 +75,7 @@ const TaskSelector: React.FC<Props> = ({ taskType, onLoad }) => {
           Бібліотека задач
         </span>
       }
-      style={{ marginBottom: 16 }}
+      style={{ marginBottom: 10 }}
     >
       {loading ? (
         <Spin size="small" />
@@ -88,7 +92,12 @@ const TaskSelector: React.FC<Props> = ({ taskType, onLoad }) => {
               label: t.title,
             }))}
           />
-          <Button type="primary" disabled={!selectedTask} onClick={handleLoad}>
+          <Button
+            type="primary"
+            disabled={!selectedTask || selectedTask.type !== taskType}
+            onClick={handleLoad}
+            title={selectedTask && selectedTask.type !== taskType ? "Оберіть задачу зі списку вище" : undefined}
+          >
             Завантажити
           </Button>
           {selectedTask && (

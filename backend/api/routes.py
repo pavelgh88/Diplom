@@ -1,5 +1,6 @@
 import json
 import os
+import random
 from flask import Blueprint, request, jsonify
 
 from algorithms.simplex import solve_simplex
@@ -89,6 +90,81 @@ def get_task(task_id: int):
     return jsonify(task)
 
 
+@api_bp.route("/tasks/random", methods=["GET"])
+def get_random_task():
+    problem_type = request.args.get("type")
+    tasks = _load_tasks()
+    if problem_type:
+        tasks = [t for t in tasks if t.get("type") == problem_type]
+    if not tasks:
+        return jsonify({"error": "Задач не знайдено"}), 404
+    task = random.choice(tasks)
+    return jsonify(task)
+
+
+@api_bp.route("/stats", methods=["GET"])
+def get_stats():
+    tasks = _load_tasks()
+    by_type: dict = {}
+    for t in tasks:
+        by_type[t["type"]] = by_type.get(t["type"], 0) + 1
+    return jsonify({
+        "total_tasks": len(tasks),
+        "by_type": by_type,
+        "algorithms": list(by_type.keys()),
+    })
+
+
+@api_bp.route("/algorithms", methods=["GET"])
+def get_algorithms():
+    return jsonify([
+        {
+            "id": "simplex",
+            "title": "Симплекс-метод",
+            "description": "Розв'язує задачу лінійного програмування симплекс-методом з покроковою таблицею.",
+        },
+        {
+            "id": "branch_and_bound",
+            "title": "Метод гілок і меж",
+            "description": "Розв'язує цілочисельну задачу ЗЛП методом гілок і меж з візуалізацією дерева.",
+        },
+        {
+            "id": "transport",
+            "title": "Транспортна задача",
+            "description": "Розв'язує транспортну задачу методом потенціалів з покроковим відображенням.",
+        },
+    ])
+
+
+@api_bp.route("/tasks/<int:task_id>/verify", methods=["POST"])
+def verify_task_answer(task_id: int):
+    """Check whether the student's computed optimal value matches the task's expected answer."""
+    tasks = _load_tasks()
+    task = next((t for t in tasks if t["id"] == task_id), None)
+    if task is None:
+        return jsonify({"error": "Задачу не знайдено"}), 404
+
+    data = request.get_json(silent=True)
+    if data is None or "optimal_value" not in data:
+        return jsonify({"error": "Очікується поле optimal_value у тілі запиту"}), 400
+
+    expected = task.get("expected", {}).get("optimal_value")
+    if expected is None:
+        return jsonify({"error": "Для цієї задачі очікуваний результат не визначено"}), 400
+
+    user_value = float(data["optimal_value"])
+    tolerance = float(data.get("tolerance", 1e-4))
+    correct = abs(user_value - expected) <= tolerance
+
+    return jsonify({
+        "correct": correct,
+        "expected": expected,
+        "user_value": user_value,
+        "message": "Правильно! Оптимальне значення збігається." if correct
+                   else f"Неправильно. Очікувалось {expected}, отримано {user_value:.4f}.",
+    })
+
+
 # ── Simplex ─────────────────────────────────────────────────────────────────────
 
 @api_bp.route("/simplex", methods=["POST"])
@@ -107,6 +183,38 @@ def simplex_endpoint():
             maximize=bool(data.get("maximize", False)),
         )
         return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@api_bp.route("/simplex/hint", methods=["POST"])
+def simplex_hint():
+    """Return step-by-step hint for the current simplex tableau without revealing the answer."""
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"error": "Очікується JSON у тілі запиту"}), 400
+    if "tableau" not in data or "col_names" not in data:
+        return jsonify({"error": "Відсутні поля: tableau, col_names"}), 400
+    try:
+        import numpy as np
+        T = np.array(data["tableau"], dtype=float)
+        m = T.shape[0] - 1
+        obj_row = T[m, :-1]
+        min_val = float(np.min(obj_row))
+        if min_val >= -1e-9:
+            return jsonify({"hint": "Таблиця вже оптимальна — всі коефіцієнти рядка z невід'ємні.", "optimal": True})
+        correct_col = int(np.argmin(obj_row))
+        col_names = data["col_names"]
+        col_name = col_names[correct_col] if correct_col < len(col_names) else f"стовпець {correct_col}"
+        return jsonify({
+            "hint": (
+                f"Підказка: у рядку цільової функції є від'ємні коефіцієнти. "
+                f"Знайдіть серед них найменший (найбільший за модулем) — це і є ведучий стовпець. "
+                f"Мінімальний коефіцієнт = {min_val:.4f}."
+            ),
+            "optimal": False,
+            "correct_col": correct_col,
+        })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 

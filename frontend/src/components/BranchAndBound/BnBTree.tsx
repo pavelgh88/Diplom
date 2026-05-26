@@ -16,24 +16,51 @@ interface Props {
 const STATUS_COLOR: Record<string, string> = {
   branched: "#1677ff",
   integer: "#52c41a",
-  pruned: "#ff7875",
+  pruned: "#ff4d4f",
   infeasible: "#bfbfbf",
+};
+
+const STATUS_BG: Record<string, string> = {
+  branched: "#e6f4ff",
+  integer: "#f6ffed",
+  pruned: "#fff1f0",
+  infeasible: "#fafafa",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   branched: "Розгалуження",
-  integer: "Цілочисельний",
-  pruned: "Відсічено",
-  infeasible: "Недопустимий",
+  integer: "✓ Цілочисельний",
+  pruned: "✗ Відсічено",
+  infeasible: "— Недопустимий",
 };
 
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 80;
-const H_GAP = 220;
-const V_GAP = 120;
+const NODE_WIDTH = 200;
+const NODE_HEIGHT = 100;
+const H_GAP = 240;
+const V_GAP = 130;
+
+function getExplanationLine(node: BnBNode): string {
+  switch (node.status) {
+    case "branched": {
+      if (node.branch_var === undefined) return "";
+      const val = (node.branch_value ?? 0).toFixed(2);
+      const j = node.branch_var + 1;
+      const fl = Math.floor(node.branch_value ?? 0);
+      const ce = Math.ceil(node.branch_value ?? 0);
+      return `x${j}=${val} → ≤${fl} | ≥${ce}`;
+    }
+    case "pruned":
+      return `LP≥рекорд → відсікаємо`;
+    case "infeasible":
+      return "Порожня область";
+    case "integer":
+      return "Оновлено рекорд!";
+    default:
+      return "";
+  }
+}
 
 function buildLayout(bnbNodes: BnBNode[]): { rfNodes: Node[]; rfEdges: Edge[] } {
-  // Compute x positions by depth-first ordering
   const childrenMap = new Map<number | null, BnBNode[]>();
   for (const n of bnbNodes) {
     const pid = n.parent_id ?? null;
@@ -63,10 +90,9 @@ function buildLayout(bnbNodes: BnBNode[]): { rfNodes: Node[]; rfEdges: Edge[] } 
   const rfNodes: Node[] = bnbNodes.map((n) => {
     const pos = posMap.get(n.id) ?? { x: 0, y: 0 };
     const color = STATUS_COLOR[n.status] ?? "#888";
-    const valLine =
-      n.lp_value !== null
-        ? `LP = ${n.lp_value?.toFixed(2)}`
-        : "Недопустимо";
+    const bg = STATUS_BG[n.status] ?? "#fff";
+    const explanation = getExplanationLine(n);
+    const lpLine = n.lp_value !== null ? `LP = ${n.lp_value?.toFixed(4)}` : "Недопустимо";
 
     return {
       id: String(n.id),
@@ -74,25 +100,42 @@ function buildLayout(bnbNodes: BnBNode[]): { rfNodes: Node[]; rfEdges: Edge[] } 
       style: {
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
-        background: "#fff",
+        background: bg,
         border: `2px solid ${color}`,
-        borderRadius: 8,
-        fontSize: 12,
-        padding: 6,
+        borderRadius: 10,
+        padding: 0,
+        overflow: "hidden",
       },
       data: {
         label: (
-          <div style={{ lineHeight: 1.4 }}>
-            <div style={{ color, fontWeight: 700, fontSize: 11 }}>
+          <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            {/* Header bar */}
+            <div style={{
+              background: color,
+              color: "#fff",
+              fontSize: 10,
+              fontWeight: 700,
+              padding: "3px 8px",
+              letterSpacing: 0.3,
+            }}>
               {STATUS_LABEL[n.status]}
             </div>
-            <div style={{ fontFamily: "monospace", fontSize: 11 }}>{n.label}</div>
-            <div style={{ fontSize: 11 }}>{valLine}</div>
-            {n.solution && (
-              <div style={{ fontSize: 10, color: "#888" }}>
-                [{n.solution.map((v) => v.toFixed(2)).join(", ")}]
+            {/* Body */}
+            <div style={{ padding: "5px 8px", flex: 1 }}>
+              <div style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 600, marginBottom: 2 }}>
+                {lpLine}
               </div>
-            )}
+              {n.solution && (
+                <div style={{ fontSize: 10, color: "#555", marginBottom: 2 }}>
+                  x = [{n.solution.map((v) => v.toFixed(2)).join(", ")}]
+                </div>
+              )}
+              {explanation && (
+                <div style={{ fontSize: 10, color: color, fontStyle: "italic" }}>
+                  {explanation}
+                </div>
+              )}
+            </div>
           </div>
         ),
       },
@@ -106,8 +149,9 @@ function buildLayout(bnbNodes: BnBNode[]): { rfNodes: Node[]; rfEdges: Edge[] } 
       source: String(n.parent_id),
       target: String(n.id),
       label: n.label,
-      style: { stroke: "#aaa" },
-      labelStyle: { fontSize: 10 },
+      style: { stroke: "#aaa", strokeWidth: 1.5 },
+      labelStyle: { fontSize: 11, fontWeight: 600 },
+      labelBgStyle: { fill: "#fff", fillOpacity: 0.85 },
     }));
 
   return { rfNodes, rfEdges };
@@ -117,11 +161,17 @@ const BnBTree: React.FC<Props> = ({ nodes }) => {
   const { rfNodes, rfEdges } = useMemo(() => buildLayout(nodes), [nodes]);
 
   return (
-    <div style={{ width: "100%", height: 560, border: "1px solid #f0f0f0", borderRadius: 8 }}>
+    <div style={{ width: "100%", height: 580, border: "1px solid #f0f0f0", borderRadius: 8, overflow: "hidden" }}>
       <ReactFlow nodes={rfNodes} edges={rfEdges} fitView attributionPosition="bottom-right">
-        <Background />
+        <Background color="#f5f5f5" gap={16} />
         <Controls />
-        <MiniMap />
+        <MiniMap
+          nodeColor={(n) => {
+            const status = nodes.find((bn) => String(bn.id) === n.id)?.status ?? "branched";
+            return STATUS_COLOR[status] ?? "#888";
+          }}
+          style={{ border: "1px solid #eee" }}
+        />
       </ReactFlow>
     </div>
   );

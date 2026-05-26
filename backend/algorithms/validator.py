@@ -186,6 +186,19 @@ def validate_bnb_branch(
 
     user_frac = lp_solution[user_branch_var] - math.floor(lp_solution[user_branch_var])
     best_frac = lp_solution[best_idx] - math.floor(lp_solution[best_idx])
+
+    if user_frac < 1e-6:
+        hint = (
+            f"x{user_branch_var + 1} = {lp_solution[user_branch_var]:.4g} — ціле число, "
+            f"по ньому розгалуження не виконується. "
+            f"Правильний вибір: x{best_idx + 1} (дробова частина {best_frac:.4f})."
+        )
+    else:
+        hint = (
+            f"x{best_idx + 1} має дробову частину {best_frac:.4f} — "
+            f"ближчу до 0.5, ніж x{user_branch_var + 1} ({user_frac:.4f})."
+        )
+
     return {
         "valid": False,
         "message": (
@@ -193,8 +206,5 @@ def validate_bnb_branch(
             f"Слід обирати змінну з найбільшою дробовою частиною (стратегія «most fractional»)."
         ),
         "correct_var": best_idx,
-        "hint": (
-            f"x{best_idx + 1} має дробову частину {best_frac:.4f}, "
-            f"тоді як x{user_branch_var + 1} — {user_frac:.4f}."
-        ),
+        "hint": hint,
     }

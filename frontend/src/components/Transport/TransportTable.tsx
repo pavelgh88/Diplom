@@ -1,5 +1,6 @@
 import React from "react";
-import { Table, Tag } from "antd";
+import { Table, Tag, Tooltip } from "antd";
+import { QuestionCircleOutlined } from "@ant-design/icons";
 import type { TransportStep } from "../../types";
 
 interface Props {
@@ -26,31 +27,45 @@ const TransportTable: React.FC<Props> = ({ step, supply, demand, costs }) => {
   // Columns: destination labels + supply column
   const columns = [
     {
-      title: "",
+      title: (
+        <Tooltip title="Постачальник Aᵢ. Значення uᵢ — потенціал рядка, обчислений з умови uᵢ+vⱼ=cᵢⱼ для базисних клітин">
+          <span style={{ cursor: "help" }}>
+            &nbsp;<QuestionCircleOutlined style={{ color: "#8c8c8c", fontSize: 11 }} />
+          </span>
+        </Tooltip>
+      ),
       dataIndex: "rowLabel",
       key: "rowLabel",
-      width: 80,
+      width: 90,
       render: (v: string) => <strong>{v}</strong>,
     },
     ...Array.from({ length: n }, (_, j) => ({
       title: (
-        <span>
-          B<sub>{j + 1}</sub>
-          {step.v[j] !== null && step.v[j] !== undefined && (
-            <Tag color="blue" style={{ marginLeft: 4, fontSize: 11 }}>
-              v={fmt(step.v[j])}
-            </Tag>
-          )}
-          <br />
-          <small style={{ color: "#999" }}>d={fmt(demand[j])}</small>
-        </span>
+        <Tooltip title={`Споживач B${j+1}. vⱼ — потенціал стовпця. Оцінка Δᵢⱼ = cᵢⱼ − uᵢ − vⱼ: якщо Δ<0, клітина кандидат на покращення`}>
+          <span style={{ cursor: "help" }}>
+            B<sub>{j + 1}</sub>
+            {step.v[j] !== null && step.v[j] !== undefined && (
+              <Tag color="blue" style={{ marginLeft: 4, fontSize: 11 }}>
+                v={fmt(step.v[j])}
+              </Tag>
+            )}
+            <br />
+            <small style={{ color: "#999" }}>d={fmt(demand[j])}</small>
+          </span>
+        </Tooltip>
       ),
       dataIndex: `col_${j}`,
       key: `col_${j}`,
       width: 120,
     })),
     {
-      title: "Запас",
+      title: (
+        <Tooltip title="Обсяг товару, який може відвантажити цей постачальник">
+          <span style={{ cursor: "help" }}>
+            Запас <QuestionCircleOutlined style={{ color: "#8c8c8c", fontSize: 11 }} />
+          </span>
+        </Tooltip>
+      ),
       dataIndex: "supply",
       key: "supply",
       width: 80,
@@ -141,15 +156,37 @@ const TransportTable: React.FC<Props> = ({ step, supply, demand, costs }) => {
   }
   dataSource.push(demandRow as any);
 
+  const ColorDot: React.FC<{ color: string; border?: string; label: string; tip: string }> = ({ color, border, label, tip }) => (
+    <Tooltip title={tip}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, cursor: "help" }}>
+        <span style={{ width: 12, height: 12, borderRadius: 2, background: color, border: border ?? "none", display: "inline-block", flexShrink: 0 }} />
+        <span style={{ fontSize: 11, color: "#666" }}>{label}</span>
+      </span>
+    </Tooltip>
+  );
+
   return (
-    <Table
-      dataSource={dataSource}
-      columns={columns}
-      pagination={false}
-      size="small"
-      bordered
-      style={{ overflowX: "auto" }}
-    />
+    <div>
+      <Table
+        dataSource={dataSource}
+        columns={columns}
+        pagination={false}
+        size="small"
+        bordered
+        style={{ overflowX: "auto" }}
+      />
+      {/* Legend */}
+      <div style={{ display: "flex", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
+        <ColorDot color="#e6f4ff" label="Синє число — xᵢⱼ" tip="Базисна клітина: обсяг перевезень від постачальника i до споживача j (xᵢⱼ > 0)" />
+        <ColorDot color="#fff7e6" border="2px solid #fa8c16" label="Помаранч. — вхідна клітина" tip="Клітина з найменшою оцінкою Δᵢⱼ < 0, яка входить до базису для покращення плану" />
+        <ColorDot color="#f6ffed" border="2px solid #52c41a" label="Зелена — цикл" tip="Клітини циклу перерозподілу: чергування +θ / −θ. θ = мін. значення серед клітин зі знаком «−»" />
+        <Tooltip title="Оцінка небазисної клітини: Δᵢⱼ = cᵢⱼ − uᵢ − vⱼ. Якщо Δ ≥ 0 для всіх клітин — план оптимальний">
+          <span style={{ fontSize: 11, color: "#666", cursor: "help" }}>
+            <span style={{ color: "#f5222d", fontWeight: 600 }}>Δ&lt;0</span> / <span style={{ color: "#389e0d", fontWeight: 600 }}>Δ≥0</span> — оцінки клітин <QuestionCircleOutlined style={{ fontSize: 11 }} />
+          </span>
+        </Tooltip>
+      </div>
+    </div>
   );
 };
 
