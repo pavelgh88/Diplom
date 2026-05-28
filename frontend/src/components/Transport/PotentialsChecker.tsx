@@ -74,9 +74,6 @@ const PotentialsChecker: React.FC<Props> = ({ step, costs, supply, demand, onMis
     }
   };
 
-  const uValues = potRevealed ? step.u : (potResult?.valid ? potResult.u : studentU);
-  const vValues = potRevealed ? step.v : (potResult?.valid ? potResult.v : studentV);
-
   return (
     <Collapse
       size="small"

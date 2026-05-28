@@ -1,10 +1,8 @@
 import React, { useState } from "react";
-import { Alert, Button, InputNumber, Space, Tag, Typography } from "antd";
+import { Alert, Button, InputNumber, Space, Tag } from "antd";
 import { CheckOutlined, EyeOutlined } from "@ant-design/icons";
 import { checkSimplexTableau } from "../../api/client";
 import type { SimplexStep, TableauCellError } from "../../types";
-
-const { Text } = Typography;
 
 interface Props {
   prevStep: SimplexStep;
