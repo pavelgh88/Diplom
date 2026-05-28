@@ -7,12 +7,19 @@ import type {
   BnBResult,
   TransportProblem,
   TransportResult,
+  TableauCheckResult,
+  PotentialsCheckResult,
+  EnteringCheckResult,
   TaskSummary,
   Task,
 } from "../types";
 
+// Set REACT_APP_API_URL in production (Vercel env vars) to your Render backend URL,
+// e.g. "https://diploma-backend.onrender.com/api". Falls back to localhost for dev.
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5001/api";
+
 const api = axios.create({
-  baseURL: "http://localhost:5001/api",
+  baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -63,6 +70,57 @@ export async function checkTransportAllocation(
     demand,
     user_allocation,
   });
+  return data;
+}
+
+// ── Blind tableau check ───────────────────────────────────────────────────────
+
+export async function checkSimplexTableau(
+  prev_tableau: number[][],
+  pivot_col: number,
+  pivot_row: number,
+  student_tableau: number[][]
+): Promise<TableauCheckResult> {
+  const { data } = await api.post<TableauCheckResult>("/simplex/check-tableau", {
+    prev_tableau, pivot_col, pivot_row, student_tableau,
+  });
+  return data;
+}
+
+// ── Transport training ────────────────────────────────────────────────────────
+
+export async function checkTransportPotentials(
+  basic_cells: number[][],
+  costs: number[][],
+  student_u: (number | null)[],
+  student_v: (number | null)[]
+): Promise<PotentialsCheckResult> {
+  const { data } = await api.post<PotentialsCheckResult>("/transport/check-potentials", {
+    basic_cells, costs, student_u, student_v,
+  });
+  return data;
+}
+
+export async function checkTransportEntering(
+  u: (number | null)[],
+  v: (number | null)[],
+  costs: number[][],
+  basic_cells: number[][],
+  user_row: number,
+  user_col: number
+): Promise<EnteringCheckResult> {
+  const { data } = await api.post<EnteringCheckResult>("/transport/check-entering", {
+    u, v, costs, basic_cells, user_row, user_col,
+  });
+  return data;
+}
+
+// ── Generator ─────────────────────────────────────────────────────────────────
+
+export async function generateTask(
+  type: string, vars: number, constraints: number
+): Promise<{ type: string; problem: any }> {
+  const { data } = await api.get("/generate", { params: { type, vars, constraints } });
   return data;
 }
 

@@ -20,13 +20,16 @@ import { MinusOutlined, PlusOutlined, QuestionCircleOutlined } from "@ant-design
 import { solveTransport } from "../../api/client";
 import TransportTable from "./TransportTable";
 import ProminentTransportStep from "./ProminentTransportStep";
+import PotentialsChecker from "./PotentialsChecker";
 import TaskSelector from "../TaskSelector";
 import TheoryPanel from "../TheoryPanel";
+import { useAppContext } from "../../context/AppContext";
 import type { TransportProblem, TransportResult } from "../../types";
 
 const { Title, Text } = Typography;
 
 const TransportSolver: React.FC = () => {
+  const { recordAttempt } = useAppContext();
   const [numSources, setNumSources] = useState(3);
   const [numDests, setNumDests] = useState(3);
   const [form] = Form.useForm();
@@ -34,6 +37,8 @@ const TransportSolver: React.FC = () => {
   const [result, setResult] = useState<TransportResult | null>(null);
   const [stepByStep, setStepByStep] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [mistakes, setMistakes] = useState(0);
+  const [taskLabel, setTaskLabel] = useState("Власна задача");
   const [lastProblem, setLastProblem] = useState<{
     supply: number[];
     demand: number[];
@@ -42,7 +47,8 @@ const TransportSolver: React.FC = () => {
 
   useEffect(() => { setCurrentStep(0); }, [result]);
 
-  const handleLoadTask = (problem: object) => {
+  const handleLoadTask = (problem: object, label?: string) => {
+    if (label) setTaskLabel(label);
     const p = problem as TransportProblem;
     if (!p.supply || !p.demand || !p.costs) return;
     const m = p.supply.length;
@@ -66,9 +72,13 @@ const TransportSolver: React.FC = () => {
     setLastProblem({ supply, demand, costs });
     setLoading(true);
     setResult(null);
+    setMistakes(0);
     try {
       const res = await solveTransport({ supply, demand, costs });
       setResult(res);
+      if (res.status === "optimal") {
+        recordAttempt({ type: "transport", label: taskLabel, mistakes, hints: 0, solved: true });
+      }
     } catch (e: any) {
       setResult({ status: "error", error: e?.message ?? "Помилка мережі" });
     } finally {
@@ -367,6 +377,16 @@ const TransportSolver: React.FC = () => {
                 onPrev={() => setCurrentStep((c) => Math.max(c - 1, 0))}
                 onNext={() => setCurrentStep((c) => Math.min(c + 1, result.steps!.length - 1))}
               />
+              {result.steps![currentStep].u.some((v) => v !== null) && (
+                <PotentialsChecker
+                  key={`pot-${currentStep}`}
+                  step={result.steps![currentStep]}
+                  costs={lastProblem.costs}
+                  supply={lastProblem.supply}
+                  demand={lastProblem.demand}
+                  onMistake={() => setMistakes((m) => m + 1)}
+                />
+              )}
             </Card>
           ) : (
             <Collapse accordion style={{ marginTop: 0 }}>

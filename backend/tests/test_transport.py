@@ -1,5 +1,5 @@
 import pytest
-from algorithms.transport import solve_transport
+from core.transport_solver import solve_transport
 
 
 class TestTransportBasic:

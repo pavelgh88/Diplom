@@ -1,5 +1,5 @@
 import pytest
-from algorithms.simplex import solve_simplex
+from core.simplex_solver import solve_simplex
 
 
 class TestSimplexMinimization:

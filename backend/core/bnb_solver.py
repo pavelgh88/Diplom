@@ -84,8 +84,8 @@ def solve_branch_and_bound(
         frac_max = 0.0
         for i, val in enumerate(result.x):
             frac_part = val - math.floor(val)
-            if frac_part > 1e-6:
-                dist = min(frac_part, 1.0 - frac_part)
+            dist = min(frac_part, 1.0 - frac_part)
+            if dist > 1e-6:  # truly fractional (away from integer on both sides)
                 if dist > frac_max:
                     frac_max = dist
                     frac_idx = i

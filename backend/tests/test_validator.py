@@ -1,5 +1,5 @@
 import pytest
-from algorithms.validator import (
+from core.validator import (
     validate_simplex_pivot,
     validate_transport_allocation,
     validate_bnb_branch,

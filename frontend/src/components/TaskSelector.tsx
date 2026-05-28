@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Card, Select, Button, Typography, Tag, Spin, Alert } from "antd";
-import { BookOutlined, CloseCircleOutlined } from "@ant-design/icons";
-import { fetchTasks, fetchTask } from "../api/client";
+import { Card, Select, Button, Typography, Tag, Spin, Alert, InputNumber, Space, Divider, message } from "antd";
+import { BookOutlined, CloseCircleOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { fetchTasks, fetchTask, generateTask } from "../api/client";
 import { useAppContext } from "../context/AppContext";
 import type { TaskSummary, TaskType } from "../types";
 
@@ -21,7 +21,7 @@ const TYPE_COLORS: Record<TaskType, string> = {
 
 interface Props {
   taskType: TaskType;
-  onLoad: (problem: object) => void;
+  onLoad: (problem: object, label?: string) => void;
 }
 
 const TaskSelector: React.FC<Props> = ({ taskType, onLoad }) => {
@@ -55,9 +55,28 @@ const TaskSelector: React.FC<Props> = ({ taskType, onLoad }) => {
     }
   };
 
+  const [genVars, setGenVars] = useState(2);
+  const [genConstraints, setGenConstraints] = useState(3);
+  const [generating, setGenerating] = useState(false);
+
   const handleLoad = () => {
     if (selectedTask) {
       onLoad(selectedTask.problem);
+    }
+  };
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const data = await generateTask(taskType, genVars, genConstraints);
+      setSelectedTask(null);
+      onLoad(data.problem, "Згенерована задача");
+      message.success("Задачу згенеровано — натисніть «Розв'язати»");
+    } catch (e: any) {
+      const msg = e?.response?.data?.error ?? e?.message ?? "Помилка мережі";
+      message.error(`Не вдалося згенерувати задачу: ${msg}`);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -107,6 +126,44 @@ const TaskSelector: React.FC<Props> = ({ taskType, onLoad }) => {
           )}
         </div>
       )}
+
+      <Divider style={{ margin: "10px 0" }} />
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <ThunderboltOutlined style={{ color: "#faad14" }} />
+        <Typography.Text style={{ fontSize: 12, color: "#595959" }}>Згенерувати випадкову:</Typography.Text>
+        {taskType !== "transport" ? (
+          <>
+            <Space size={4}>
+              <Typography.Text style={{ fontSize: 11, color: "#888" }}>змінних:</Typography.Text>
+              <InputNumber size="small" min={1} max={6} value={genVars} onChange={(v) => setGenVars(v ?? 2)} style={{ width: 52 }} />
+            </Space>
+            <Space size={4}>
+              <Typography.Text style={{ fontSize: 11, color: "#888" }}>обмежень:</Typography.Text>
+              <InputNumber size="small" min={1} max={8} value={genConstraints} onChange={(v) => setGenConstraints(v ?? 3)} style={{ width: 52 }} />
+            </Space>
+          </>
+        ) : (
+          <>
+            <Space size={4}>
+              <Typography.Text style={{ fontSize: 11, color: "#888" }}>постач.:</Typography.Text>
+              <InputNumber size="small" min={2} max={5} value={genVars} onChange={(v) => setGenVars(v ?? 3)} style={{ width: 52 }} />
+            </Space>
+            <Space size={4}>
+              <Typography.Text style={{ fontSize: 11, color: "#888" }}>спожив.:</Typography.Text>
+              <InputNumber size="small" min={2} max={5} value={genConstraints} onChange={(v) => setGenConstraints(v ?? 3)} style={{ width: 52 }} />
+            </Space>
+          </>
+        )}
+        <Button
+          size="small"
+          icon={<ThunderboltOutlined />}
+          loading={generating}
+          onClick={handleGenerate}
+          style={{ borderColor: "#faad14", color: "#d46b08" }}
+        >
+          Згенерувати
+        </Button>
+      </div>
 
       {selectedTask && selectedTask.type === taskType && (
         <div style={{ marginTop: 10 }}>

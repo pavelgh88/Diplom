@@ -102,6 +102,51 @@ export interface TransportResult {
   error?: string;
 }
 
+// ──── Blind tableau validation ────────────────────────────────────────────────
+
+export interface TableauCellError {
+  row: number;
+  col: number;
+  expected: number;
+  got: number;
+}
+
+export interface TableauCheckResult {
+  valid: boolean;
+  message: string;
+  errors: TableauCellError[];
+  expected_tableau?: number[][];
+}
+
+// ──── Transport training ──────────────────────────────────────────────────────
+
+export interface PotentialsCheckResult {
+  valid: boolean;
+  message: string;
+  errors: Array<{ type: "u" | "v"; index: number; expected: number; got: number | null }>;
+  u?: (number | null)[];
+  v?: (number | null)[];
+}
+
+export interface EnteringCheckResult {
+  valid: boolean;
+  message: string;
+  optimal?: boolean;
+  correct_cell?: [number, number];
+  hint?: string;
+}
+
+// ──── Session statistics ──────────────────────────────────────────────────────
+
+export interface TaskAttempt {
+  type: string;
+  label: string;
+  mistakes: number;
+  hints: number;
+  solved: boolean;
+  ts: number;
+}
+
 // ──── Tasks library ───────────────────────────────────────────────────────────
 
 export type TaskType = "simplex" | "branch_and_bound" | "transport";

@@ -3,14 +3,18 @@ import os
 import random
 from flask import Blueprint, request, jsonify
 
-from algorithms.simplex import solve_simplex
-from algorithms.branch_and_bound import solve_branch_and_bound
-from algorithms.transport import solve_transport
-from algorithms.validator import (
+from core.simplex_solver import solve_simplex
+from core.bnb_solver import solve_branch_and_bound
+from core.transport_solver import solve_transport
+from core.validator import (
     validate_simplex_pivot,
+    validate_simplex_tableau,
     validate_transport_allocation,
+    validate_transport_potentials,
+    validate_transport_entering,
     validate_bnb_branch,
 )
+from core.generator import generate_lp, generate_ilp, generate_transport
 
 api_bp = Blueprint("api", __name__)
 
@@ -313,5 +317,103 @@ def transport_check():
             demand=data["demand"], user_allocation=data["user_allocation"],
         )
         return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@api_bp.route("/transport/check-potentials", methods=["POST"])
+def transport_check_potentials():
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"error": "Очікується JSON"}), 400
+    for field in ("basic_cells", "costs", "student_u", "student_v"):
+        if field not in data:
+            return jsonify({"error": f"Відсутнє поле: {field}"}), 400
+    try:
+        result = validate_transport_potentials(
+            basic_cells=data["basic_cells"],
+            costs=data["costs"],
+            student_u=data["student_u"],
+            student_v=data["student_v"],
+        )
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@api_bp.route("/transport/check-entering", methods=["POST"])
+def transport_check_entering():
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"error": "Очікується JSON"}), 400
+    for field in ("u", "v", "costs", "basic_cells", "user_row", "user_col"):
+        if field not in data:
+            return jsonify({"error": f"Відсутнє поле: {field}"}), 400
+    try:
+        result = validate_transport_entering(
+            u=data["u"], v=data["v"],
+            costs=data["costs"],
+            basic_cells=data["basic_cells"],
+            user_row=int(data["user_row"]),
+            user_col=int(data["user_col"]),
+        )
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── Simplex blind tableau check ──────────────────────────────────────────────────
+
+@api_bp.route("/simplex/check-tableau", methods=["POST"])
+def simplex_check_tableau():
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({"error": "Очікується JSON"}), 400
+    for field in ("prev_tableau", "pivot_col", "pivot_row", "student_tableau"):
+        if field not in data:
+            return jsonify({"error": f"Відсутнє поле: {field}"}), 400
+    try:
+        result = validate_simplex_tableau(
+            prev_tableau=data["prev_tableau"],
+            pivot_col=int(data["pivot_col"]),
+            pivot_row=int(data["pivot_row"]),
+            student_tableau=data["student_tableau"],
+        )
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── Random task generator ────────────────────────────────────────────────────────
+
+@api_bp.route("/generate", methods=["GET"])
+def generate_task():
+    task_type = request.args.get("type", "simplex")
+    try:
+        n_vars = int(request.args.get("vars", 2))
+        n_constraints = int(request.args.get("constraints", 3))
+    except ValueError:
+        return jsonify({"error": "vars та constraints мають бути цілими числами"}), 400
+
+    n_vars = max(1, min(n_vars, 6))
+    n_constraints = max(1, min(n_constraints, 8))
+
+    import random as _rand
+    seed = _rand.randint(0, 10**9)
+
+    try:
+        if task_type == "simplex":
+            prob = generate_lp(n_vars=n_vars, n_constraints=n_constraints, maximize=True, seed=seed)
+        elif task_type == "branch_and_bound":
+            prob = generate_ilp(n_vars=n_vars, n_constraints=n_constraints, maximize=True, seed=seed)
+        elif task_type == "transport":
+            prob = generate_transport(n_sources=n_vars, n_dests=n_constraints, seed=seed)
+        else:
+            return jsonify({"error": f"Невідомий тип: {task_type}"}), 400
+
+        if prob is None:
+            return jsonify({"error": "Не вдалося згенерувати задачу — спробуйте ще раз"}), 500
+
+        return jsonify({"type": task_type, "generated": True, "problem": prob})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

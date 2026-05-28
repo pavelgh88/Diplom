@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert, Button, Card, Collapse, Row, Col, Space,
-  Statistic, Switch, Tag, Typography, Spin,
+  Statistic, Switch, Tag, Typography, Spin, Tooltip,
 } from "antd";
-import { LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { LeftOutlined, RightOutlined, EyeInvisibleOutlined } from "@ant-design/icons";
 import ProblemInputForm from "../ProblemInputForm";
 import type { ProblemInputFormHandle } from "../ProblemInputForm";
 import SimplexTable from "./SimplexTable";
+import BlindTableauInput from "./BlindTableauInput";
 import TaskSelector from "../TaskSelector";
 import TheoryPanel from "../TheoryPanel";
 import { solveSimplex, checkSimplexPivot } from "../../api/client";
+import { useAppContext } from "../../context/AppContext";
 import type { LPProblem, SimplexResult, SimplexStep, ValidatorResult } from "../../types";
 
 const { Title, Text } = Typography;
@@ -21,8 +23,11 @@ const fmtN = (v: number) => {
 
 // ── Interactive pivot check (two-phase: column → row) ────────────────────────
 
-const PivotCheck: React.FC<{ step: SimplexStep; maximize: boolean; onChecked: () => void }> = ({ step, maximize, onChecked }) => {
-  const [phase, setPhase] = useState<"col" | "row" | "done">("col");
+const PivotCheck: React.FC<{
+  step: SimplexStep; maximize: boolean; onChecked: () => void;
+  blindMode: boolean; onMistake: () => void;
+}> = ({ step, maximize, onChecked, blindMode, onMistake }) => {
+  const [phase, setPhase] = useState<"col" | "row" | "done" | "blind">("col");
   const [colSelected, setColSelected] = useState<number | null>(null);
   const [rowSelected, setRowSelected] = useState<number | null>(null);
   const [checking, setChecking] = useState(false);
@@ -52,6 +57,7 @@ const PivotCheck: React.FC<{ step: SimplexStep; maximize: boolean; onChecked: ()
       if (colSelected === res.correct_col) {
         setPhase("row");
       } else {
+        onMistake();
         setPhase("done");
         onChecked();
       }
@@ -71,8 +77,14 @@ const PivotCheck: React.FC<{ step: SimplexStep; maximize: boolean; onChecked: ()
         user_pivot_row: rowSelected,
       });
       setRowResult(res);
-      setPhase("done");
-      onChecked();
+      const bothCorrect = colSelected === res.correct_col && rowSelected === res.correct_row;
+      if (!bothCorrect) onMistake();
+      if (blindMode && bothCorrect) {
+        setPhase("blind");
+      } else {
+        setPhase("done");
+        onChecked();
+      }
     } catch { /* silent */ } finally {
       setChecking(false);
     }
@@ -91,9 +103,11 @@ const PivotCheck: React.FC<{ step: SimplexStep; maximize: boolean; onChecked: ()
     : [];
 
   const borderColor =
+    phase === "blind" ? "#52c41a" :
     phase === "done" && colCorrect && rowCorrect ? "#52c41a" :
     phase === "done" ? "#ff4d4f" : "#91caff";
   const bg =
+    phase === "blind" ? "#f6ffed" :
     phase === "done" && colCorrect && rowCorrect ? "#f6ffed" :
     phase === "done" ? "#fff1f0" : "#f0f7ff";
 
@@ -107,7 +121,7 @@ const PivotCheck: React.FC<{ step: SimplexStep; maximize: boolean; onChecked: ()
       {phase === "col" && (
         <>
           <div style={{ fontSize: 12, color: "#595959", marginBottom: 8 }}>
-            Яку змінну слід ввести в базис? (найменший від'ємний коефіцієнт рядка ЦФ)
+            Яку змінну слід ввести в базис? ({maximize ? "найбільший додатний" : "найменший від'ємний"} коефіцієнт рядка ЦФ)
           </div>
           <Space wrap style={{ marginBottom: 10 }}>
             {varCols.map((name, idx) => (
@@ -157,21 +171,39 @@ const PivotCheck: React.FC<{ step: SimplexStep; maximize: boolean; onChecked: ()
             </tbody>
           </table>
           <Space wrap style={{ marginBottom: 10 }}>
-            {Array.from({ length: m }, (_, i) => (
-              <Button key={i} size="small"
-                type={rowSelected === i ? "primary" : "default"}
-                disabled={rowRatios[i]?.theta === null}
-                style={{ fontFamily: "monospace" }}
-                onClick={() => setRowSelected(i)}
-              >
-                {row_names[i]}
-              </Button>
-            ))}
+            {Array.from({ length: m }, (_, i) => {
+              const disabled = rowRatios[i]?.theta === null;
+              const btn = (
+                <Button key={i} size="small"
+                  type={rowSelected === i ? "primary" : "default"}
+                  disabled={disabled}
+                  style={{ fontFamily: "monospace" }}
+                  onClick={() => setRowSelected(i)}
+                >
+                  {row_names[i]}
+                </Button>
+              );
+              return disabled
+                ? <Tooltip key={i} title={`a = ${fmtN(rowRatios[i]?.aij ?? 0)} ≤ 0 — рядок не може бути ведучим (правило мін. відношення вимагає a > 0)`}>{btn}</Tooltip>
+                : btn;
+            })}
           </Space>
           <Button size="small" type="primary" disabled={rowSelected === null} loading={checking} onClick={handleRowCheck}>
             Перевірити рядок
           </Button>
         </>
+      )}
+
+      {/* Blind tableau entry */}
+      {phase === "blind" && colResult?.correct_col != null && rowResult?.correct_row != null && (
+        <BlindTableauInput
+          prevStep={step}
+          pivotCol={colResult.correct_col}
+          pivotRow={rowResult.correct_row}
+          maximize={maximize}
+          onConfirmed={() => { setPhase("done"); onChecked(); }}
+          onMistake={onMistake}
+        />
       )}
 
       {/* Done — show results */}
@@ -182,7 +214,7 @@ const PivotCheck: React.FC<{ step: SimplexStep; maximize: boolean; onChecked: ()
               <span style={{ color: "#389e0d" }}>
                 ✅ Стовпець:{" "}
                 <Tag color="blue" style={{ fontFamily: "monospace" }}>{col_names[colSelected!]}</Tag>
-                — правильно (найменший від'ємний коефіцієнт ЦФ).
+                — правильно ({maximize ? "найбільший додатний" : "найменший від'ємний"} коефіцієнт ЦФ).
               </span>
             ) : (
               <span style={{ color: "#cf1322" }}>
@@ -221,6 +253,132 @@ const PivotCheck: React.FC<{ step: SimplexStep; maximize: boolean; onChecked: ()
   );
 };
 
+// ── Pivot computation breakdown (Gaussian elimination, number-by-number) ─────
+
+const paren = (v: number) => (v < 0 ? `(${fmtN(v)})` : fmtN(v));
+
+const PivotComputation: React.FC<{ step: SimplexStep }> = ({ step }) => {
+  const { tableau, col_names, row_names, pivot_row, pivot_col } = step;
+  if (pivot_row === null || pivot_col === null) return null;
+
+  const m = tableau.length - 1;
+  const pivotEl = tableau[pivot_row][pivot_col];
+  const entering = col_names[pivot_col];
+  const leaving = row_names[pivot_row];
+
+  // Row operations applied to the displayed tableau reproduce the next tableau exactly.
+  const normPivot = tableau[pivot_row].map((v) => v / pivotEl);
+  const next = tableau.map((row, i) => {
+    if (i === pivot_row) return normPivot;
+    const mult = row[pivot_col];
+    return row.map((v, j) => v - mult * normPivot[j]);
+  });
+
+  const changed = (i: number, j: number) => Math.abs(next[i][j] - tableau[i][j]) > 1e-9;
+
+  const cellStyle: React.CSSProperties = {
+    border: "1px solid #e8e8e8",
+    padding: "3px 7px",
+    textAlign: "center",
+    fontFamily: "monospace",
+    verticalAlign: "middle",
+    whiteSpace: "nowrap",
+  };
+  const subLine: React.CSSProperties = { fontSize: 9.5, color: "#8c8c8c", marginTop: 1 };
+
+  const otherRows = Array.from({ length: m + 1 }, (_, i) => i).filter((i) => i !== pivot_row);
+
+  return (
+    <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+      <div style={{ marginBottom: 8 }}>
+        Елемент зведення (pivot):{" "}
+        <strong style={{ fontFamily: "monospace", color: "#d4380d" }}>a = {fmtN(pivotEl)}</strong>{" "}
+        на перетині рядка <strong>{leaving}</strong> і стовпця <strong>{entering}</strong>.
+        Перетворюємо таблицю за два кроки.
+      </div>
+
+      {/* Step 3 — normalize pivot row */}
+      <div style={{ fontWeight: 700, margin: "10px 0 4px" }}>
+        Крок 3 — нормуємо ведучий рядок: R<sub>{leaving}</sub> ← R<sub>{leaving}</sub> ÷ {fmtN(pivotEl)}
+      </div>
+      <div style={{ marginBottom: 6 }}>
+        Ділимо весь ведучий рядок на pivot, щоб на його місці стала <strong>1</strong>.
+      </div>
+
+      {/* Step 4 — eliminate the entering column from every other row */}
+      <div style={{ fontWeight: 700, margin: "12px 0 4px" }}>
+        Крок 4 — обнуляємо стовпець «{entering}» в усіх інших рядках
+      </div>
+      <div style={{ marginBottom: 6 }}>
+        Для кожного рядка: R<sub>k</sub> ← R<sub>k</sub> − a<sub>k</sub> · R<sub>{leaving}</sub>,
+        де a<sub>k</sub> — значення в стовпці «{entering}»:
+        <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+          {otherRows.map((i) => {
+            const mult = tableau[i][pivot_col];
+            return (
+              <li key={i} style={{ fontFamily: "monospace", fontSize: 11.5 }}>
+                R<sub>{row_names[i]}</sub> ← R<sub>{row_names[i]}</sub> − {paren(mult)} · R<sub>{leaving}</sub>
+                {Math.abs(mult) < 1e-9 && <span style={{ color: "#8c8c8c" }}> (a = 0 → рядок не змінюється)</span>}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      {/* Resulting tableau with per-cell arithmetic */}
+      <div style={{ overflowX: "auto", marginTop: 8 }}>
+        <table style={{ borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ ...cellStyle, background: "#fafafa", color: "#8c8c8c" }}>База</th>
+              {col_names.map((name, j) => (
+                <th key={j} style={{ ...cellStyle, background: "#fafafa" }}>{name}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {next.map((row, i) => {
+              const isPivotRow = i === pivot_row;
+              const mult = tableau[i][pivot_col];
+              return (
+                <tr key={i}>
+                  <td style={{ ...cellStyle, background: "#fafafa", fontWeight: 700, color: i === m ? "#1677ff" : undefined }}>
+                    {isPivotRow ? entering : row_names[i]}
+                  </td>
+                  {row.map((val, j) => {
+                    const isPivotCell = isPivotRow && j === pivot_col;
+                    const didChange = changed(i, j);
+                    let bg = "transparent";
+                    if (isPivotRow) bg = "#f6ffed";
+                    else if (didChange) bg = "#fffbe6";
+                    return (
+                      <td key={j} style={{ ...cellStyle, background: bg }}>
+                        <div style={{ fontWeight: isPivotCell ? 700 : 500 }}>{fmtN(val)}</div>
+                        {isPivotRow && Math.abs(pivotEl - 1) > 1e-9 && (
+                          <div style={subLine}>{fmtN(tableau[i][j])} ÷ {fmtN(pivotEl)}</div>
+                        )}
+                        {!isPivotRow && didChange && (
+                          <div style={subLine}>{fmtN(tableau[i][j])} − {paren(mult)}·{paren(normPivot[j])}</div>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap", fontSize: 11, color: "#666" }}>
+        <span><span style={{ background: "#f6ffed", border: "1px solid #b7eb8f", padding: "0 6px", borderRadius: 2 }}>зелений</span> — ведучий рядок (÷pivot)</span>
+        <span><span style={{ background: "#fffbe6", border: "1px solid #ffe58f", padding: "0 6px", borderRadius: 2 }}>жовтий</span> — змінені клітинки</span>
+        <span><strong>1</strong> — елемент зведення стає одиницею</span>
+      </div>
+    </div>
+  );
+};
+
 // ── Prominent step-by-step view ───────────────────────────────────────────────
 
 interface ProminentProps {
@@ -228,12 +386,14 @@ interface ProminentProps {
   stepIndex: number;
   totalSteps: number;
   maximize: boolean;
+  blindMode: boolean;
   onPrev: () => void;
   onNext: () => void;
+  onMistake: () => void;
 }
 
 const ProminentStep: React.FC<ProminentProps> = ({
-  step, stepIndex, totalSteps, maximize, onPrev, onNext,
+  step, stepIndex, totalSteps, maximize, blindMode, onPrev, onNext, onMistake,
 }) => {
   const [checked, setChecked] = useState(false);
   const { tableau, col_names, row_names, pivot_row, pivot_col } = step;
@@ -251,7 +411,12 @@ const ProminentStep: React.FC<ProminentProps> = ({
     coeff: tableau[m][j],
   }));
 
-  const negCoeffs = objCoeffs.filter(({ coeff }) => coeff < -1e-9);
+  // For min: a coefficient improves the plan if it's negative (< 0); optimal when all >= 0.
+  // For max: the displayed objective row keeps the original sign, so it improves if positive (> 0); optimal when all <= 0.
+  const improving = (coeff: number) => (maximize ? coeff > 1e-9 : coeff < -1e-9);
+  const negCoeffs = objCoeffs.filter(({ coeff }) => improving(coeff));
+  const entCriterion = maximize ? "найбільшим додатним" : "найменшим (найбільш від'ємним)";
+  const optCondition = maximize ? "≤ 0" : "≥ 0";
 
   const ratios = (pivot_col !== null)
     ? Array.from({ length: m }, (_, i) => ({
@@ -343,7 +508,10 @@ const ProminentStep: React.FC<ProminentProps> = ({
           </div>
 
           {/* Interactive check — always visible, reveals explanations on submit */}
-          <PivotCheck step={step} maximize={maximize} onChecked={() => setChecked(true)} />
+          <PivotCheck
+            step={step} maximize={maximize} blindMode={blindMode}
+            onChecked={() => setChecked(true)} onMistake={onMistake}
+          />
 
           {/* Explanations revealed only after the student has checked */}
           {checked && (
@@ -352,11 +520,11 @@ const ProminentStep: React.FC<ProminentProps> = ({
               <div style={blockStyle("#ffa940", "#fff7e6")}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>🔍 Перевірка оптимальності</div>
                 <div style={{ marginBottom: 6 }}>
-                  Коефіцієнти рядка ЦФ:{" "}
+                  Оцінки (Δⱼ) — нижній рядок таблиці:{" "}
                   {objCoeffs.map(({ name, coeff }) => (
                     <Tag
                       key={name}
-                      color={coeff < -1e-9 ? "orange" : "default"}
+                      color={improving(coeff) ? "orange" : "default"}
                       style={{ fontFamily: "monospace", fontSize: 11, marginBottom: 3 }}
                     >
                       {name} = {fmtN(coeff)}
@@ -365,12 +533,12 @@ const ProminentStep: React.FC<ProminentProps> = ({
                 </div>
                 {negCoeffs.length > 0 ? (
                   <div>
-                    ❌ Є від'ємні коефіцієнти:{" "}
+                    ❌ Є {maximize ? "додатні" : "від'ємні"} оцінки:{" "}
                     {negCoeffs.map(({ name }) => <strong key={name}>{name} </strong>)} —{" "}
                     план <strong>не оптимальний</strong>, продовжуємо.
                   </div>
                 ) : (
-                  <div>✅ Всі коефіцієнти ≥ 0 — план <strong>оптимальний</strong>.</div>
+                  <div>✅ Всі оцінки {optCondition} — план <strong>оптимальний</strong>.</div>
                 )}
               </div>
 
@@ -378,7 +546,7 @@ const ProminentStep: React.FC<ProminentProps> = ({
               <div style={blockStyle("#91caff", "#e6f4ff")}>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>⚡ Вибір ведучого стовпця</div>
                 <div>
-                  Обираємо стовпець з <strong>найменшим (найбільш від'ємним)</strong> коефіцієнтом рядка ЦФ.
+                  Обираємо стовпець з <strong>{entCriterion}</strong> коефіцієнтом рядка ЦФ.
                 </div>
                 <div style={{ marginTop: 6 }}>
                   Ведучий стовпець:{" "}
@@ -456,6 +624,19 @@ const ProminentStep: React.FC<ProminentProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Pivot computation — Gaussian elimination, revealed in place */}
+              {pivot_row !== null && (
+                <Collapse
+                  ghost
+                  style={{ background: "#f9f0ff", border: "1px solid #d3adf7", borderRadius: 6, marginBottom: 10 }}
+                  items={[{
+                    key: "calc",
+                    label: <span style={{ fontWeight: 700, fontSize: 13 }}>🧮 Показати детальні обчислення pivot-операції</span>,
+                    children: <PivotComputation step={step} />,
+                  }]}
+                />
+              )}
             </>
           )}
         </>
@@ -466,7 +647,7 @@ const ProminentStep: React.FC<ProminentProps> = ({
         <div style={blockStyle("#95de64", "#f6ffed")}>
           <div style={{ fontWeight: 700, marginBottom: 6 }}>✅ Умова оптимальності виконана</div>
           <div>
-            Всі коефіцієнти рядка ЦФ ≥ 0 — жодна небазисна змінна не може зменшити значення z.
+            Всі оцінки рядка ЦФ {optCondition} — жодна небазисна змінна не може {maximize ? "збільшити" : "зменшити"} значення z.
           </div>
           <div style={{ marginTop: 6 }}>
             <strong>Оптимальний базис:</strong>{" "}
@@ -512,21 +693,26 @@ const ProminentStep: React.FC<ProminentProps> = ({
 // ── Main component ────────────────────────────────────────────────────────────
 
 const SimplexSolver: React.FC = () => {
+  const { recordAttempt } = useAppContext();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SimplexResult | null>(null);
   const [stepByStep, setStepByStep] = useState(false);
+  const [blindMode, setBlindMode] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [isMaximize, setIsMaximize] = useState(false);
+  const [mistakes, setMistakes] = useState(0);
+  const [taskLabel, setTaskLabel] = useState("Власна задача");
   const formRef = useRef<ProblemInputFormHandle | null>(null);
+  const recordedRef = useRef(false);
 
-  useEffect(() => {
-    setCurrentStep(0);
-  }, [result]);
+  useEffect(() => { setCurrentStep(0); recordedRef.current = false; }, [result]);
 
   const handleSolve = async (problem: LPProblem) => {
     setIsMaximize(problem.maximize);
     setLoading(true);
     setResult(null);
+    setMistakes(0);
+    recordedRef.current = false;
     try {
       const res = await solveSimplex(problem);
       setResult(res);
@@ -537,12 +723,26 @@ const SimplexSolver: React.FC = () => {
     }
   };
 
-  const handleLoadTask = (problem: object) => {
+  const handleLoadTask = (problem: object, label?: string) => {
     formRef.current?.loadProblem(problem as LPProblem);
+    if (label) setTaskLabel(label);
   };
 
   const steps = result?.steps ?? [];
   const totalSteps = steps.length;
+
+  // When step-by-step is toggled ON, reset recorded flag so mistakes can be tracked
+  useEffect(() => {
+    if (stepByStep) recordedRef.current = false;
+  }, [stepByStep]);
+
+  // Record attempt: in step-by-step mode only on the last step; in normal mode immediately
+  useEffect(() => {
+    if (!result || result.status !== "optimal" || recordedRef.current) return;
+    if (stepByStep && currentStep < totalSteps - 1) return;
+    recordedRef.current = true;
+    recordAttempt({ type: "simplex", label: taskLabel, mistakes, hints: 0, solved: true });
+  }, [currentStep, stepByStep, result, totalSteps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
@@ -618,20 +818,40 @@ const SimplexSolver: React.FC = () => {
               </Card>
 
               {/* Mode toggle */}
-              <Row align="middle" style={{ marginTop: 16, marginBottom: 10 }} gutter={12}>
+              <Row align="middle" style={{ marginTop: 16, marginBottom: 10 }} gutter={16}>
                 <Col>
                   <Title level={5} style={{ margin: 0 }}>Покрокове розв'язання</Title>
                 </Col>
                 <Col>
-                  <Space size={8}>
-                    <Text type="secondary" style={{ fontSize: 12 }}>Режим навчання:</Text>
-                    <Switch
-                      size="small"
-                      checked={stepByStep}
-                      onChange={(v) => { setStepByStep(v); setCurrentStep(0); }}
-                      checkedChildren="крок за кроком"
-                      unCheckedChildren="всі кроки"
-                    />
+                  <Space size={12}>
+                    <Space size={6}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>Крок за кроком:</Text>
+                      <Switch
+                        size="small"
+                        checked={stepByStep}
+                        onChange={(v) => { setStepByStep(v); setCurrentStep(0); }}
+                        checkedChildren="так"
+                        unCheckedChildren="ні"
+                      />
+                    </Space>
+                    {stepByStep && (
+                      <Tooltip title="У сліпому режимі після вибору ведучого елемента ви самостійно обчислюєте наступну таблицю вручну">
+                        <Space size={6}>
+                          <EyeInvisibleOutlined style={{ color: blindMode ? "#1677ff" : "#bbb" }} />
+                          <Text type="secondary" style={{ fontSize: 12 }}>Сліпий режим:</Text>
+                          <Switch
+                            size="small"
+                            checked={blindMode}
+                            onChange={setBlindMode}
+                            checkedChildren="так"
+                            unCheckedChildren="ні"
+                          />
+                        </Space>
+                      </Tooltip>
+                    )}
+                    {mistakes > 0 && (
+                      <Tag color="red">Помилок: {mistakes}</Tag>
+                    )}
                   </Space>
                 </Col>
               </Row>
@@ -645,8 +865,10 @@ const SimplexSolver: React.FC = () => {
                     stepIndex={currentStep}
                     totalSteps={totalSteps}
                     maximize={isMaximize}
+                    blindMode={blindMode}
                     onPrev={() => setCurrentStep((c) => Math.max(c - 1, 0))}
                     onNext={() => setCurrentStep((c) => Math.min(c + 1, totalSteps - 1))}
+                    onMistake={() => setMistakes((m) => m + 1)}
                   />
                 </Card>
               ) : (
@@ -666,7 +888,7 @@ const SimplexSolver: React.FC = () => {
                         {step.description}
                       </Space>
                     ),
-                    children: <SimplexTable step={step} stepIndex={idx} />,
+                    children: <SimplexTable step={step} stepIndex={idx} maximize={isMaximize} />,
                   }))}
                 />
               )}

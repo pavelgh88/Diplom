@@ -208,3 +208,153 @@ def validate_bnb_branch(
         "correct_var": best_idx,
         "hint": hint,
     }
+
+
+def validate_simplex_tableau(
+    prev_tableau: List[List[float]],
+    pivot_col: int,
+    pivot_row: int,
+    student_tableau: List[List[float]],
+) -> Dict[str, Any]:
+    """Compare student's hand-computed next tableau with the correct pivot result."""
+    T = np.array(prev_tableau, dtype=float)
+    T[pivot_row] = T[pivot_row] / T[pivot_row, pivot_col]
+    for i in range(len(T)):
+        if i != pivot_row:
+            T[i] -= T[i, pivot_col] * T[pivot_row]
+
+    expected = T.tolist()
+    S = np.array(student_tableau, dtype=float)
+
+    if S.shape != T.shape:
+        return {"valid": False, "message": "Розмір таблиці не збігається.", "errors": [], "expected_tableau": expected}
+
+    errors = []
+    for r in range(len(expected)):
+        for c in range(len(expected[r])):
+            if abs(expected[r][c] - float(S[r][c])) > 1e-3:
+                errors.append({
+                    "row": r, "col": c,
+                    "expected": round(expected[r][c], 4),
+                    "got": round(float(S[r][c]), 4),
+                })
+
+    if not errors:
+        return {"valid": True, "message": "Таблицю обчислено правильно!", "errors": [], "expected_tableau": expected}
+
+    return {
+        "valid": False,
+        "message": f"Знайдено {len(errors)} помилок у таблиці. Перевірте виділені клітинки.",
+        "errors": errors,
+        "expected_tableau": [[round(v, 4) for v in row] for row in expected],
+    }
+
+
+def validate_transport_potentials(
+    basic_cells: List[List[int]],
+    costs: List[List[float]],
+    student_u: List[Optional[float]],
+    student_v: List[Optional[float]],
+) -> Dict[str, Any]:
+    """Validate student-computed potentials u_i, v_j (u[0] = 0 convention)."""
+    m, n = len(student_u), len(student_v)
+    C = np.array(costs, dtype=float)
+
+    u: List[Optional[float]] = [None] * m
+    v: List[Optional[float]] = [None] * n
+    u[0] = 0.0
+    changed = True
+    while changed:
+        changed = False
+        for (bi, bj) in basic_cells:
+            if bi < m and bj < n:
+                if u[bi] is not None and v[bj] is None:
+                    v[bj] = float(C[bi, bj]) - u[bi]
+                    changed = True
+                elif v[bj] is not None and u[bi] is None:
+                    u[bi] = float(C[bi, bj]) - v[bj]
+                    changed = True
+
+    errors = []
+    for i, (su, cu) in enumerate(zip(student_u, u)):
+        if cu is None:
+            continue
+        if su is None or abs(float(su) - cu) > 1e-3:
+            errors.append({"type": "u", "index": i, "expected": round(cu, 4), "got": su})
+
+    for j, (sv, cv) in enumerate(zip(student_v, v)):
+        if cv is None:
+            continue
+        if sv is None or abs(float(sv) - cv) > 1e-3:
+            errors.append({"type": "v", "index": j, "expected": round(cv, 4), "got": sv})
+
+    if not errors:
+        return {
+            "valid": True,
+            "message": "Потенціали обчислені правильно!",
+            "errors": [],
+            "u": [round(x, 4) if x is not None else None for x in u],
+            "v": [round(x, 4) if x is not None else None for x in v],
+        }
+
+    return {
+        "valid": False,
+        "message": f"Знайдено {len(errors)} помилок. Пам'ятайте: u₀ = 0, а для базисних клітинок c_ij = u_i + v_j.",
+        "errors": errors,
+        "u": [round(x, 4) if x is not None else None for x in u],
+        "v": [round(x, 4) if x is not None else None for x in v],
+    }
+
+
+def validate_transport_entering(
+    u: List[float],
+    v: List[float],
+    costs: List[List[float]],
+    basic_cells: List[List[int]],
+    user_row: int,
+    user_col: int,
+) -> Dict[str, Any]:
+    """Validate which non-basic cell the student chose as entering (most negative delta)."""
+    C = np.array(costs, dtype=float)
+    m, n = C.shape
+    basic_set = {(r, c) for r, c in basic_cells if r < m and c < n}
+
+    best_delta = 0.0
+    best_cell = None
+    for i in range(m):
+        for j in range(n):
+            if (i, j) in basic_set:
+                continue
+            if u[i] is None or v[j] is None:
+                continue
+            delta = float(C[i, j]) - float(u[i]) - float(v[j])
+            if delta < best_delta - 1e-9:
+                best_delta = delta
+                best_cell = (i, j)
+
+    if best_cell is None:
+        return {
+            "valid": True,
+            "message": "Усі оцінки Δ ≥ 0 — поточний план оптимальний, вхідної клітинки немає.",
+            "optimal": True,
+        }
+
+    user_delta = float(C[user_row, user_col]) - float(u[user_row]) - float(v[user_col])
+    if (user_row, user_col) == best_cell:
+        return {
+            "valid": True,
+            "message": f"Правильно! Клітинка ({user_row+1},{user_col+1}) має Δ = {best_delta:.4f} — найменше серед від'ємних.",
+            "optimal": False,
+            "correct_cell": list(best_cell),
+        }
+
+    return {
+        "valid": False,
+        "message": (
+            f"Неправильний вибір. Клітинка ({user_row+1},{user_col+1}) має Δ = {user_delta:.4f}, "
+            f"але мінімальне Δ = {best_delta:.4f} у клітинці ({best_cell[0]+1},{best_cell[1]+1})."
+        ),
+        "optimal": False,
+        "correct_cell": list(best_cell),
+        "hint": "Обирайте клітинку з найбільшим від'ємним значенням Δ_ij = c_ij − u_i − v_j.",
+    }

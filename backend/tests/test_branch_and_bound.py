@@ -1,5 +1,5 @@
 import pytest
-from algorithms.branch_and_bound import solve_branch_and_bound
+from core.bnb_solver import solve_branch_and_bound
 
 
 class TestBranchAndBoundBasic:

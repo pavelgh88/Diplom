@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { ConfigProvider, Layout, Tabs } from "antd";
+import { Button, ConfigProvider, Layout, Tabs } from "antd";
+import { BarChartOutlined } from "@ant-design/icons";
 import ukUA from "antd/locale/uk_UA";
 import SimplexSolver from "./components/SimplexSolver/SimplexSolver";
 import BranchAndBound from "./components/BranchAndBound/BranchAndBound";
 import TransportSolver from "./components/Transport/TransportSolver";
+import StatsPanel from "./components/StatsPanel";
 import { AppProvider } from "./context/AppContext";
 
 const { Header, Content } = Layout;
@@ -46,6 +48,7 @@ const AppShell: React.FC = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const activeTab = pathToTab[pathname] ?? "simplex";
+  const [statsOpen, setStatsOpen] = useState(false);
 
   return (
     <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
@@ -62,18 +65,28 @@ const AppShell: React.FC = () => {
           zIndex: 100,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
           <Logo />
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 16, lineHeight: 1.25, letterSpacing: 0.2 }}>
-              Розв'язувач задач ЗЛП
+              Навчальний тренажер ЦП
             </span>
             <span style={{ color: "rgba(255,255,255,0.60)", fontSize: 11, lineHeight: 1.2, letterSpacing: 0.3 }}>
               Симплекс · Гілки і межі · Транспорт
             </span>
           </div>
+          <div style={{ marginLeft: "auto" }}>
+            <Button
+              icon={<BarChartOutlined />}
+              onClick={() => setStatsOpen(true)}
+              style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff" }}
+            >
+              Статистика
+            </Button>
+          </div>
         </div>
       </Header>
+      <StatsPanel open={statsOpen} onClose={() => setStatsOpen(false)} />
       <Content style={{ padding: "20px 24px" }}>
         <div style={{ maxWidth: 1000, margin: "0 auto" }}>
           <Tabs

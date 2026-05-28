@@ -9,6 +9,7 @@ interface Props {
   step: SimplexStep;
   stepIndex: number;
   hideExplanation?: boolean;
+  maximize?: boolean;
 }
 
 const fmt = (v: number) => {
@@ -25,7 +26,7 @@ const ColorDot: React.FC<{ color: string; label: string; tip: string }> = ({ col
   </Tooltip>
 );
 
-const StepExplanation: React.FC<{ step: SimplexStep }> = ({ step }) => {
+const StepExplanation: React.FC<{ step: SimplexStep; maximize?: boolean }> = ({ step, maximize }) => {
   const { tableau, col_names, row_names, pivot_row, pivot_col } = step;
   const m = tableau.length - 1; // number of constraint rows
   const lastCol = tableau[0].length - 1;
@@ -43,7 +44,7 @@ const StepExplanation: React.FC<{ step: SimplexStep }> = ({ step }) => {
         <div>
           <Text style={{ color: "#1d3557", fontSize: 12 }}>
             <span style={{ background: "#f0f5ff", padding: "1px 6px", borderRadius: 3, marginRight: 4 }}>Ведучий стовпець</span>
-            <strong>«{entering}»</strong> — коефіцієнт рядка ЦФ = <strong style={{ color: "#d4380d" }}>{fmt(objCoeff)}</strong> (найменший від'ємний → найбільший виграш при збільшенні цієї змінної)
+            <strong>«{entering}»</strong> — коефіцієнт рядка ЦФ = <strong style={{ color: "#d4380d" }}>{fmt(objCoeff)}</strong> ({maximize ? "найбільший додатний" : "найменший від'ємний"} → найбільший виграш при збільшенні цієї змінної)
           </Text>
         </div>
         <div>
@@ -67,7 +68,7 @@ const StepExplanation: React.FC<{ step: SimplexStep }> = ({ step }) => {
     return (
       <div style={{ background: "#f6ffed", border: "1px solid #b7eb8f", borderRadius: 6, padding: "8px 12px", marginTop: 8, fontSize: 12 }}>
         <Text style={{ color: "#135200", fontSize: 12 }}>
-          ✅ <strong>Умова оптимальності виконана:</strong> всі коефіцієнти рядка цільової функції ≥ 0 — жодна змінна поза базисом не може покращити значення ЦФ. Розв'язання завершено.
+          ✅ <strong>Умова оптимальності виконана:</strong> всі оцінки рядка цільової функції {maximize ? "≤ 0" : "≥ 0"} — жодна змінна поза базисом не може покращити значення ЦФ. Розв'язання завершено.
         </Text>
       </div>
     );
@@ -83,7 +84,7 @@ const StepExplanation: React.FC<{ step: SimplexStep }> = ({ step }) => {
   );
 };
 
-const SimplexTable: React.FC<Props> = ({ step, stepIndex, hideExplanation }) => {
+const SimplexTable: React.FC<Props> = ({ step, stepIndex, hideExplanation, maximize }) => {
   const { tableau, col_names, row_names, pivot_row, pivot_col } = step;
 
   const columns = col_names.map((name, colIdx) => ({
@@ -147,7 +148,7 @@ const SimplexTable: React.FC<Props> = ({ step, stepIndex, hideExplanation }) => 
           <Tag color={step.description.includes("Оптимальна") ? "success" : step.description.includes("Початкова") ? "default" : "processing"}>
             Крок {stepIndex + 1}: {step.description}
           </Tag>
-          <StepExplanation step={step} />
+          <StepExplanation step={step} maximize={maximize} />
         </>
       )}
 
@@ -163,10 +164,10 @@ const SimplexTable: React.FC<Props> = ({ step, stepIndex, hideExplanation }) => 
 
       {/* Color legend */}
       <div style={{ display: "flex", gap: 14, marginTop: 6, flexWrap: "wrap" }}>
-        <ColorDot color="#f0f5ff" label="Ведучий стовпець" tip="Змінна, що входить до базису — має найменший (найбільш від'ємний) коефіцієнт у рядку цільової функції" />
+        <ColorDot color="#f0f5ff" label="Ведучий стовпець" tip={`Змінна, що входить до базису — має ${maximize ? "найбільший додатний" : "найменший (найбільш від'ємний)"} коефіцієнт у рядку цільової функції`} />
         <ColorDot color="#fff7e6" label="Ведучий рядок" tip="Обмеження, яке визначає максимально допустиме збільшення ведучої змінної (мінімальне відношення b/a)" />
         <ColorDot color="#ff7875" label="Елемент зведення" tip="Опорний елемент (pivot) — на нього ділять ведучий рядок і через нього обнуляють стовпець" />
-        <ColorDot color="#1677ff" label="Рядок ЦФ" tip="Рядок цільової функції z. Від'ємні значення вказують на можливість покращення розв'язку" />
+        <ColorDot color="#1677ff" label="Рядок ЦФ" tip={`Рядок цільової функції z. ${maximize ? "Додатні" : "Від'ємні"} значення вказують на можливість покращення розв'язку`} />
       </div>
     </div>
   );

@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: diploma-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:application --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 60
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      - key: FRONTEND_URL
+        sync: false   # set this in the Render dashboard to your Vercel URL after first deploy

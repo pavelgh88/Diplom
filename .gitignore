@@ -11,3 +11,6 @@ frontend/build/
 
 # OS
 .DS_Store
+
+# Local agent / IDE config
+.claude/

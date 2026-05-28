@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Button, Space, Tag, Typography } from "antd";
+import React, { useMemo, useState } from "react";
+import { Button, Collapse, Space, Tag, Typography } from "antd";
 import { LeftOutlined, RightOutlined } from "@ant-design/icons";
 import TransportTable from "./TransportTable";
 import type { TransportStep } from "../../types";
@@ -22,6 +22,80 @@ const block = (color: string, bg: string): React.CSSProperties => ({
   fontSize: 13,
   lineHeight: 1.7,
 });
+
+// ── Cycle redistribution: new allocation with per-cell arithmetic ─────────────
+const CycleComputation: React.FC<{
+  allocation: number[][];
+  loop: number[][];
+  theta: number;
+}> = ({ allocation, loop, theta }) => {
+  const n = allocation[0].length;
+  const sign = new Map<string, number>();
+  loop.forEach(([r, c], k) => sign.set(`${r}_${c}`, k % 2 === 0 ? 1 : -1));
+  const newAlloc = allocation.map((row, i) =>
+    row.map((v, j) => {
+      const s = sign.get(`${i}_${j}`);
+      return s === undefined ? v : v + s * theta;
+    })
+  );
+
+  const td: React.CSSProperties = {
+    border: "1px solid #e8e8e8", padding: "3px 8px", textAlign: "center",
+    fontFamily: "monospace", minWidth: 56, verticalAlign: "middle",
+  };
+  const sub: React.CSSProperties = { fontSize: 9.5, marginTop: 1 };
+
+  return (
+    <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+      <div style={{ marginBottom: 6 }}>
+        Додаємо <strong>+θ = {fmt(theta)}</strong> до клітин зі знаком «+» і віднімаємо те саме від клітин «−».
+        Решта клітин не змінюється.
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={{ ...td, background: "#fafafa" }} />
+              {Array.from({ length: n }, (_, j) => (
+                <th key={j} style={{ ...td, background: "#fafafa" }}>B{j + 1}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {newAlloc.map((row, i) => (
+              <tr key={i}>
+                <th style={{ ...td, background: "#fafafa" }}>A{i + 1}</th>
+                {row.map((val, j) => {
+                  const s = sign.get(`${i}_${j}`);
+                  const old = allocation[i][j];
+                  const leaving = s === -1 && Math.abs(val) < 1e-9;
+                  let bg = "transparent";
+                  if (s === 1) bg = "#f6ffed";
+                  else if (leaving) bg = "#fff1f0";
+                  else if (s === -1) bg = "#fff7e6";
+                  return (
+                    <td key={j} style={{ ...td, background: bg }}>
+                      <div style={{ fontWeight: s !== undefined ? 700 : 400, color: val > 1e-9 ? "#1677ff" : "#bbb" }}>
+                        {val > 1e-9 ? fmt(val) : "·"}
+                      </div>
+                      {s === 1 && <div style={{ ...sub, color: "#389e0d" }}>{fmt(old)} + {fmt(theta)}</div>}
+                      {s === -1 && <div style={{ ...sub, color: leaving ? "#cf1322" : "#d46b08" }}>{fmt(old)} − {fmt(theta)}{leaving ? " (виходить)" : ""}</div>}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap", fontSize: 11, color: "#666" }}>
+        <span><span style={{ background: "#f6ffed", border: "1px solid #b7eb8f", padding: "0 6px", borderRadius: 2 }}>зелений</span> — клітини «+θ»</span>
+        <span><span style={{ background: "#fff7e6", border: "1px solid #ffe58f", padding: "0 6px", borderRadius: 2 }}>жовтий</span> — клітини «−θ»</span>
+        <span><span style={{ background: "#fff1f0", border: "1px solid #ffccc7", padding: "0 6px", borderRadius: 2 }}>червоний</span> — виходить з базису (→ 0)</span>
+      </div>
+    </div>
+  );
+};
 
 interface Props {
   step: TransportStep;
@@ -63,6 +137,35 @@ const ProminentTransportStep: React.FC<Props> = ({
     );
   }
   negativeCells.sort((a, b) => a.delta - b.delta);
+
+  // Build quiz options: all negative cells + distractors (non-basic cells with Δ≥0)
+  // to ensure at least 3 choices so the quiz is non-trivial.
+  const quizOptions = useMemo(() => {
+    if (!step.delta || !step.entering_cell) return negativeCells;
+    const needed = Math.max(0, 3 - negativeCells.length);
+    if (needed === 0) {
+      // Shuffle the existing options deterministically
+      const seed = step.entering_cell[0] * 13 + step.entering_cell[1] * 7;
+      return [...negativeCells].sort((a, b) =>
+        ((a.i * 31 + a.j * 17 + seed) % 100) - ((b.i * 31 + b.j * 17 + seed) % 100)
+      );
+    }
+    // Collect non-basic cells with Δ ≥ 0 as distractors (pick smallest positive = most deceptive)
+    const distractors: { i: number; j: number; delta: number }[] = [];
+    step.delta.forEach((row, i) =>
+      row.forEach((d, j) => {
+        if (d !== null && d >= -1e-9 && !basicSet.has(`${i}_${j}`)) {
+          distractors.push({ i, j, delta: d });
+        }
+      })
+    );
+    distractors.sort((a, b) => a.delta - b.delta);
+    const all = [...negativeCells, ...distractors.slice(0, needed)];
+    const seed = step.entering_cell[0] * 13 + step.entering_cell[1] * 7;
+    return [...all].sort((a, b) =>
+      ((a.i * 31 + a.j * 17 + seed) % 100) - ((b.i * 31 + b.j * 17 + seed) % 100)
+    );
+  }, [step.entering_cell, step.delta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Theta for cycle redistribution
   let theta: number | null = null;
@@ -192,7 +295,7 @@ const ProminentTransportStep: React.FC<Props> = ({
             const correctKey = `${step.entering_cell[0]}_${step.entering_cell[1]}`;
             const isCorrect = cellSelected === correctKey;
             const selectedCell = cellSelected
-              ? negativeCells.find(({ i, j }) => `${i}_${j}` === cellSelected)
+              ? quizOptions.find(({ i, j }) => `${i}_${j}` === cellSelected)
               : null;
             return (
               <div style={{
@@ -211,7 +314,7 @@ const ProminentTransportStep: React.FC<Props> = ({
                       Обери клітину з <strong>найменшим (найбільш від'ємним)</strong> значенням Δᵢⱼ:
                     </div>
                     <Space wrap style={{ marginBottom: 10 }}>
-                      {negativeCells.map(({ i, j, delta }) => {
+                      {quizOptions.map(({ i, j, delta }) => {
                         const key = `${i}_${j}`;
                         return (
                           <Button
@@ -309,6 +412,15 @@ const ProminentTransportStep: React.FC<Props> = ({
                 Клітина з вантажем θ у знаку «−» <strong>виходить з базису</strong>.
                 Додаємо +θ до клітин «+» і −θ до клітин «−».
               </div>
+              <Collapse
+                ghost
+                style={{ background: "#fff", border: "1px solid #b7eb8f", borderRadius: 6, marginTop: 10 }}
+                items={[{
+                  key: "calc",
+                  label: <span style={{ fontWeight: 700, fontSize: 13 }}>🧮 Показати перерозподіл по циклу (з обчисленнями)</span>,
+                  children: <CycleComputation allocation={step.allocation} loop={step.loop} theta={theta} />,
+                }]}
+              />
             </div>
           )}
         </>

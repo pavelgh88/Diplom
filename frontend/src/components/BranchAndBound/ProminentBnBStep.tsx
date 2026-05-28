@@ -336,6 +336,42 @@ const ProminentBnBStep: React.FC<Props> = ({
             — дробове значення. Обираємо її для розгалуження, оскільки вона{" "}
             найближча до 0.5 (максимальна невизначеність).
           </div>
+
+          {/* Why this variable — fractional parts compared */}
+          {fracVars.length > 0 && (
+            <div style={{ marginTop: 10, fontSize: 12 }}>
+              <div style={{ marginBottom: 4 }}>Чому саме ця змінна — порівнюємо дробові частини (обираємо найближчу до 0.5):</div>
+              <table style={{ borderCollapse: "collapse", fontFamily: "monospace", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ color: "#8c8c8c" }}>
+                    {["Змінна", "значення", "дробова частина", "|частка − 0.5|"].map((h) => (
+                      <th key={h} style={{ padding: "3px 10px", borderBottom: "1px solid #d6e4ff", textAlign: "center", fontWeight: 600 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {fracVars.map(({ v, i }) => {
+                    const frac = v - Math.floor(v);
+                    const dist = Math.abs(frac - 0.5);
+                    const chosen = i === node.branch_var;
+                    return (
+                      <tr key={i} style={{ background: chosen ? "#bae0ff" : "transparent", fontWeight: chosen ? 700 : 400 }}>
+                        <td style={{ padding: "3px 10px", textAlign: "center" }}>
+                          x{i + 1}{chosen && <Tag color="blue" style={{ marginLeft: 6, fontSize: 10 }}>← обрана</Tag>}
+                        </td>
+                        <td style={{ padding: "3px 10px", textAlign: "center" }}>{fmt(v)}</td>
+                        <td style={{ padding: "3px 10px", textAlign: "center" }}>{fmt(frac)}</td>
+                        <td style={{ padding: "3px 10px", textAlign: "center", color: chosen ? "#1677ff" : undefined }}>
+                          {fmt(dist)}{chosen && " (мін)"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           <Row gutter={12} style={{ marginTop: 10 }}>
             <Col span={12}>
               <Card size="small" style={{ border: "1px solid #91caff", background: "#f0f7ff", textAlign: "center" }}>
