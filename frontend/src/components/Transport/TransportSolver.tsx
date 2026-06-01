@@ -21,6 +21,7 @@ import { solveTransport } from "../../api/client";
 import TransportTable from "./TransportTable";
 import ProminentTransportStep from "./ProminentTransportStep";
 import PotentialsChecker from "./PotentialsChecker";
+import TransportTestMode from "./TransportTestMode";
 import TaskSelector from "../TaskSelector";
 import TheoryPanel from "../TheoryPanel";
 import { useAppContext } from "../../context/AppContext";
@@ -36,6 +37,7 @@ const TransportSolver: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TransportResult | null>(null);
   const [stepByStep, setStepByStep] = useState(false);
+  const [testMode, setTestMode] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [mistakes, setMistakes] = useState(0);
   const [taskLabel, setTaskLabel] = useState("Власна задача");
@@ -91,10 +93,33 @@ const TransportSolver: React.FC = () => {
 
   return (
     <div>
-      <Title level={4} style={{ margin: "0 0 2px" }}>Транспортна задача</Title>
-      <Text type="secondary" style={{ display: "block", fontSize: 13, marginBottom: 14 }}>
-        Розв'язує транспортну задачу методом потенціалів з покроковою перевіркою плану перевезень.
-      </Text>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 4 }}>
+        <Col>
+          <Title level={4} style={{ margin: 0 }}>Транспортна задача</Title>
+          <Text type="secondary" style={{ display: "block", fontSize: 13 }}>
+            {testMode
+              ? "Тестовий режим: випадкові задачі, ти відповідаєш сам, програма оцінює."
+              : "Розв'язує транспортну задачу методом потенціалів з покроковою перевіркою плану перевезень."}
+          </Text>
+        </Col>
+        <Col>
+          <Space>
+            <Text type="secondary" style={{ fontSize: 12 }}>🧪 Тестовий режим:</Text>
+            <Switch
+              checked={testMode}
+              onChange={setTestMode}
+              checkedChildren="увімк."
+              unCheckedChildren="вимк."
+            />
+          </Space>
+        </Col>
+      </Row>
+
+      {testMode ? (
+        <div style={{ marginTop: 14 }}>
+          <TransportTestMode />
+        </div>
+      ) : (<>
 
       <TheoryPanel>
         <p style={{ marginBottom: 6 }}><strong>Математична модель:</strong></p>
@@ -434,6 +459,7 @@ const TransportSolver: React.FC = () => {
           )}
         </div>
       )}
+      </>)}
     </div>
   );
 };
