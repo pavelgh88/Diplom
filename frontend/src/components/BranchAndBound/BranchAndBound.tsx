@@ -4,6 +4,7 @@ import ProblemInputForm from "../ProblemInputForm";
 import type { ProblemInputFormHandle } from "../ProblemInputForm";
 import BnBTree from "./BnBTree";
 import ProminentBnBStep from "./ProminentBnBStep";
+import BnBTestMode from "./BnBTestMode";
 import TaskSelector from "../TaskSelector";
 import TheoryPanel from "../TheoryPanel";
 import { solveBranchAndBound } from "../../api/client";
@@ -82,6 +83,7 @@ const BranchAndBound: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<BnBResult | null>(null);
   const [stepByStep, setStepByStep] = useState(false);
+  const [testMode, setTestMode] = useState(false);
   const [currentNode, setCurrentNode] = useState(0);
   const formRef = useRef<ProblemInputFormHandle | null>(null);
 
@@ -167,10 +169,27 @@ const BranchAndBound: React.FC = () => {
 
   return (
     <div>
-      <Title level={4} style={{ margin: "0 0 2px" }}>Метод гілок і меж</Title>
-      <Text type="secondary" style={{ display: "block", fontSize: 13, marginBottom: 14 }}>
-        Розв'язує цілочисельну задачу лінійного програмування методом гілок і меж з візуалізацією дерева перебору.
-      </Text>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 4 }}>
+        <Col>
+          <Title level={4} style={{ margin: 0 }}>Метод гілок і меж</Title>
+          <Text type="secondary" style={{ display: "block", fontSize: 13 }}>
+            {testMode
+              ? "Тестовий режим: випадкова цілочислова задача, ти приймаєш рішення на дереві."
+              : "Розв'язує цілочисельну задачу лінійного програмування методом гілок і меж з візуалізацією дерева перебору."}
+          </Text>
+        </Col>
+        <Col>
+          <Space>
+            <Text type="secondary" style={{ fontSize: 12 }}>🧪 Тестовий режим:</Text>
+            <Switch checked={testMode} onChange={setTestMode}
+              checkedChildren="увімк." unCheckedChildren="вимк." />
+          </Space>
+        </Col>
+      </Row>
+
+      {testMode ? (
+        <div style={{ marginTop: 14 }}><BnBTestMode /></div>
+      ) : (<>
 
       <TheoryPanel>
         <p style={{ marginBottom: 6 }}><strong>Ідея методу:</strong></p>
@@ -309,6 +328,7 @@ const BranchAndBound: React.FC = () => {
           )}
         </div>
       )}
+      </>)}
     </div>
   );
 };
