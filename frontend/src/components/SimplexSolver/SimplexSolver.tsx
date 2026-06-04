@@ -8,6 +8,7 @@ import ProblemInputForm from "../ProblemInputForm";
 import type { ProblemInputFormHandle } from "../ProblemInputForm";
 import SimplexTable from "./SimplexTable";
 import BlindTableauInput from "./BlindTableauInput";
+import SimplexTestMode from "./SimplexTestMode";
 import TaskSelector from "../TaskSelector";
 import TheoryPanel from "../TheoryPanel";
 import { solveSimplex, checkSimplexPivot } from "../../api/client";
@@ -698,6 +699,7 @@ const SimplexSolver: React.FC = () => {
   const [result, setResult] = useState<SimplexResult | null>(null);
   const [stepByStep, setStepByStep] = useState(false);
   const [blindMode, setBlindMode] = useState(false);
+  const [testMode, setTestMode] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [isMaximize, setIsMaximize] = useState(false);
   const [mistakes, setMistakes] = useState(0);
@@ -746,10 +748,27 @@ const SimplexSolver: React.FC = () => {
 
   return (
     <div>
-      <Title level={4} style={{ margin: "0 0 2px" }}>Симплекс-метод</Title>
-      <Text type="secondary" style={{ display: "block", fontSize: 13, marginBottom: 14 }}>
-        Розв'язує задачу лінійного програмування покроково із відображенням симплекс-таблиці на кожній ітерації.
-      </Text>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 4 }}>
+        <Col>
+          <Title level={4} style={{ margin: 0 }}>Симплекс-метод</Title>
+          <Text type="secondary" style={{ display: "block", fontSize: 13 }}>
+            {testMode
+              ? "Тестовий режим: випадкова задача ЛП, ти приймаєш рішення на кожній ітерації."
+              : "Розв'язує задачу лінійного програмування покроково із відображенням симплекс-таблиці на кожній ітерації."}
+          </Text>
+        </Col>
+        <Col>
+          <Space>
+            <Text type="secondary" style={{ fontSize: 12 }}>🧪 Тестовий режим:</Text>
+            <Switch checked={testMode} onChange={setTestMode}
+              checkedChildren="увімк." unCheckedChildren="вимк." />
+          </Space>
+        </Col>
+      </Row>
+
+      {testMode ? (
+        <div style={{ marginTop: 14 }}><SimplexTestMode /></div>
+      ) : (<>
 
       <TheoryPanel>
         <p style={{ marginBottom: 6 }}><strong>Математична модель (стандартна форма):</strong></p>
@@ -896,6 +915,7 @@ const SimplexSolver: React.FC = () => {
           )}
         </div>
       )}
+      </>)}
     </div>
   );
 };
